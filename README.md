@@ -11,3 +11,9 @@ LLM이 사실에 근거한 답변을 하도록 외부지식을 참고한다. 이
 |보안|중간|높음|
 |맞춤화|일부 파인튜닝만 지원|모델 구조 변경 통한 성능 향상|
 |예시|ChatGPT(OpenAI)|Llama(Meta)|
+
+## 3. 개발환경
+- Python, Streamlit, LangChain, OpenAI
+```bash
+$ streamlit run <app.py>
+```
