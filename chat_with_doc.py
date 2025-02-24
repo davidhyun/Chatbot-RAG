@@ -31,7 +31,7 @@ def load_pdf(_file):
 # 텍스트 청크들을 Chroma(VectorDB) 안에 임베딩 벡터로 저장
 @st.cache_resource
 def create_vector_store(_docs):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=50)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", " ", ""])
     split_docs = text_splitter.split_documents(_docs)
     persist_directory = "./chroma_db"
     vectorstore = Chroma.from_documents(
@@ -53,14 +53,22 @@ def chaining(_pages):
     retriever = vectorstore.as_retriever()
     
     qa_system_prompt = """
-        You are an assistant for question-answering tasks. \
-        Use the following pieces of retrieved context to answer the question. \
-        If you don't know the answer, just say that you don't know. \
-        Keep the answer perfect. please use imogi with the answer.
-        Please answer in Korean and use respectful language.\
+        질문-답변 업무를 돕는 보조원입니다. 
+        질문에 답하기 위해 문서를 기반으로 검색하여 답변하세요.
+        답을 모르면 모른다고 말하세요.
+        한국어로 정중하게 답변하세요.
+        간략하게 답변하세요.
+
+        ## 답변 예시
+        **[답변]**
+        답변 내용 서술
+        \n
+        **[문서 내 출처 위치]**
+        문서 내 출처 페이지와 정보 위치 서술
+
         {context}
     """
-    
+
     qa_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", qa_system_prompt),
@@ -68,7 +76,7 @@ def chaining(_pages):
         ]
     )
     
-    llm = ChatOpenAI(model="gpt-4o")
+    llm = ChatOpenAI(model="gpt-4o-mini")
     
     rag_chain = (
         {"context": retriever | format_docs, "input": RunnablePassthrough()}
