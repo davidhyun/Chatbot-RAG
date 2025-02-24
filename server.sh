@@ -12,7 +12,8 @@ if [ "$STATUS" = "run" ]; then
         -p 18502:8501 \
         -v $PWD:/app \
         --env-file .env \
-        $IMAGE_NAME
+        $IMAGE_NAME \
+        streamlit run chat_with_memory.py
 
 elif [ "$STATUS" = "start" ]; then
     echo "Executing: docker start"

@@ -12,6 +12,7 @@ langchain-core = "*"
 langchain-chroma = "*"
 pypdf = "*"
 langchain-text-splitters = "*"
+chromadb = "==0.5.0"
 
 [dev-packages]
 
