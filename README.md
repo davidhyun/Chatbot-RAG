@@ -5,6 +5,7 @@
 LLM이 사실에 근거한 답변을 하도록 외부지식을 참고한다. 이 외부지식은 문서를 수치화(임베딩)하여 벡터 DB에 저장하여 답변에 활용한다.
 
 ## 2. Closed LLM VS OpenSource LLM
+
 |구분|Closed LLM|OpenSource LLM|
 |비용|사용량 기반 종량제|LLM 구축 및 추론 비용|
 |성능|높음|중간~낮음|
