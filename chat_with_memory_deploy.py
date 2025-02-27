@@ -17,7 +17,7 @@ from langchain_community.chat_message_histories.streamlit import StreamlitChatMe
 load_dotenv()
 
 # cache_resource로 한번 실행한 결과 캐싱해두기
-@st.cache_resource
+# @st.cache_resource
 def load_and_split_pdf(_file):
     # 임시 파일을 생성하여 업로드된 PDF 파일의 데이터를 저장
     with tempfile.NamedTemporaryFile(mode="wb", delete=False) as tmp_file:
@@ -34,7 +34,7 @@ def load_and_split_pdf(_file):
         return pages # 분할된 페이지들을 반환
     
 # 텍스트 청크들을 Chroma 안에 임베딩 벡터로 저장
-@st.cache_resource
+# @st.cache_resource
 def create_vector_store(_docs):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", "."])
     split_docs = text_splitter.split_documents(_docs)
@@ -47,7 +47,7 @@ def create_vector_store(_docs):
     return vectorstore
 
 # 만약 기존에 저장해둔 ChromaDB가 있는 경우, 이를 로드
-@st.cache_resource
+# @st.cache_resource
 def get_vector_store(_docs):
     persist_directory = "./chroma_db"
     if os.path.exists(persist_directory):
@@ -60,7 +60,7 @@ def get_vector_store(_docs):
     
 
 # PDF 문서 로드-벡터 DB 저장-검색기-히스토리 모두 합친 Chain 구축
-@st.cache_resource
+# @st.cache_resource
 def chaining(_pages, selected_model):
     vectorstore = create_vector_store(_pages)
     retriever = vectorstore.as_retriever()
@@ -113,6 +113,23 @@ def chaining(_pages, selected_model):
 st.title("PDF Q&A 챗봇 💬")
 selected_model = st.selectbox("Select GPT Model", ("gpt-4o", "gpt-3.5-turbo-0125"))
 uploaded_file = st.file_uploader("PDF 파일을 업로드해주세요.", type=["pdf"])
+
+if st.button("채팅방 초기화"):
+    st.session_state["messages"] = [
+        {
+            "role": "assistant",
+            "content": "안녕하세요. PDF 내용에 대해 무엇이든 물어보세요!"
+        }
+    ]
+    st.session_state["chat_messages"] = []
+    import shutil
+    import chromadb
+    shutil.rmtree("./chroma_db")
+    chromadb.api.client.SharedSystemClient.clear_system_cache()
+    st.cache_data.clear()
+    st.rerun()
+
+
 if uploaded_file is not None:
     pages = load_and_split_pdf(uploaded_file)
     
