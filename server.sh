@@ -2,8 +2,8 @@
 
 STATUS=$1
 
-IMAGE_NAME="llm-chatbot:v0.1"
-CONTAINER_NAME="llm-chatbot"
+IMAGE_NAME="chatbot:v0.1"
+CONTAINER_NAME="chatbot"
 
 if [ "$STATUS" = "run" ]; then
     echo "Executing: docker run"
@@ -13,7 +13,7 @@ if [ "$STATUS" = "run" ]; then
         -v $PWD:/app \
         --env-file .env \
         $IMAGE_NAME \
-        streamlit run chat_with_memory_deploy.py
+        streamlit run chatapp.py
 
 elif [ "$STATUS" = "start" ]; then
     echo "Executing: docker start"

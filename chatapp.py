@@ -2,7 +2,6 @@ import os
 import tempfile
 import shutil
 import streamlit as st
-from chromadb.config import Settings
 from dotenv import load_dotenv
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_community.document_loaders import PyPDFLoader
@@ -10,6 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS # Vectorstore 라이브러리
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 import chromadb
+from chromadb.config import Settings
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -36,6 +36,8 @@ load_dotenv()
 #   - 에이전트 구현
 #   - 인터넷 검색 Tool 사용
 
+########## [Process Sequence] ##########
+
 
 # cache_resource로 한번 실행한 결과 캐싱해두기
 # @st.cache_resource
@@ -56,12 +58,9 @@ def load_and_split_pdf(_file):
     
 # 텍스트 청크들을 Chroma 안에 임베딩 벡터로 저장
 # @st.cache_resource
-def create_vector_store(_docs):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", "."])
-    split_docs = text_splitter.split_documents(_docs)
-    persist_directory = "./chroma_db"
+def create_vectorstore(documents, persist_directory):
     vectorstore = Chroma.from_documents(
-        split_docs,
+        documents,
         OpenAIEmbeddings(model='text-embedding-3-small'),
         persist_directory=persist_directory,
         client_settings=Settings(allow_reset=True)
@@ -70,27 +69,28 @@ def create_vector_store(_docs):
 
 # 만약 기존에 저장해둔 ChromaDB가 있는 경우, 이를 로드
 # @st.cache_resource
-def get_vector_store(_docs):
-    persist_directory = "./chroma_db"
+def get_vectorstore(persist_directory):
     if os.path.exists(persist_directory):
-        return Chroma(
+        vectorstore = Chroma(
             persist_directory=persist_directory,
             embedding_function=OpenAIEmbeddings(model='text-embedding-3-small'),
         )
+        return vectorstore
     else:
-        return create_vector_store(_docs)
+        return None
 
-def initialize_vector_store():
-    # 기존에 만들어진 벡터 스토어 초기화
-    client = chromadb.PersistentClient(path="./chroma_db")
+def init_vectorstore(persist_directory):
+    # 벡터스토어 초기화
+    client = chromadb.PersistentClient(
+        path=persist_directory,
+        settings=Settings(allow_reset=True)
+        )
+    client.reset()
     client.clear_system_cache()
 
-# PDF 문서 로드-벡터 DB 저장-검색기-히스토리 모두 합친 Chain 구축
+# 프롬프트 | LLM 모델 | 검색기 RAG 체인 구축
 # @st.cache_resource
-def chaining(_pages, selected_model):
-    vectorstore = create_vector_store(_pages)
-    retriever = vectorstore.as_retriever()
-    
+def chaining(retriever, selected_model):
     # 채팅 히스토리 요약 시스템 프롬프트 (주어진 채팅 이력과 사용자의 마지막 질문을 바탕으로 하나의 독립된 질문을 구성)
     contextualize_q_system_prompt = """
         Given a chat history and the latest user question \
@@ -139,7 +139,15 @@ def chaining(_pages, selected_model):
 # Streamlit UI
 st.title("PDF Q&A 챗봇 💬")
 
+# Initialize vector store
+persist_directory = "./chroma_db"
+init_vectorstore(persist_directory)
+
 if st.button("채팅방 초기화"):
+    # 벡터DB 초기화
+    init_vectorstore(persist_directory)
+
+    # 채팅 이력 세션 초기화   
     st.session_state["messages"] = [
         {
             "role": "assistant",
@@ -147,9 +155,8 @@ if st.button("채팅방 초기화"):
         }
     ]
     st.session_state["chat_messages"] = []
-    initialize_vector_store()
-    # del st.session_state['uploaded_file']
-    # st.session_state['uploaded_file'] = None
+        
+    # 캐시 초기화
     st.cache_data.clear()
     st.rerun()
 
@@ -157,9 +164,19 @@ selected_model = st.selectbox("Select GPT Model", ("gpt-4o", "gpt-3.5-turbo-0125
 uploaded_file = st.file_uploader("PDF 파일을 업로드해주세요.", type=["pdf"])
 
 if uploaded_file is not None:
+    # PDF 파일을 로드하고 페이지로 분할
     pages = load_and_split_pdf(uploaded_file)
     
-    rag_chain = chaining(pages, selected_model)
+    # 페이지 문서를 텍스트 청크로 분할
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50, separators=["\n\n", "\n", "."])
+    splitted_docs = text_splitter.split_documents(pages)
+    
+    # 벡터스토어 구성
+    vectorstore = create_vectorstore(splitted_docs, persist_directory)
+    retriever = vectorstore.as_retriever()
+    
+    # RAG 체인 구축
+    rag_chain = chaining(retriever, selected_model)
 
     chat_history = StreamlitChatMessageHistory(key="chat_messages")
 
@@ -187,15 +204,15 @@ if uploaded_file is not None:
         with st.chat_message("ai"):
             config = {"configurable": {"session_id": "any"}}
             with st.spinner("두뇌 풀가동 중..."):
-                config = {"configurable": {"session_id": "any"}}
                 response = conversational_rag_chain.invoke(
-                    {"input": prompt_message},
-                    config
+                    input={"input": prompt_message},
+                    config={"configurable": {"session_id": "any"}}
                 )
                 
-                answer = response["answer"]                
-                st.write(answer)
+                # 답변 및 참고문서 출력
+                st.write(response["answer"])
                 with st.expander("참고 문서 확인"):
                     for doc in response["context"]:
-                        st.markdown(doc.metadata["source"], help=doc.page_content)
-                        
+                        st.markdown(f"### {uploaded_file.name}")
+                        st.markdown(f"#### {doc.metadata['page_label']} Page")
+                        st.write(doc.page_content)

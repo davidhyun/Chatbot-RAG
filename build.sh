@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker build -t llm-chatbot:v0.1 .
+docker build -t chatbot:v0.1 .
